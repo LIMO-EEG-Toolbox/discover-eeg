@@ -3,16 +3,14 @@
 % Cristina Gil, TUM, cristina.gil@tum.de, 25.07.2022
 
 
-clear all; close all;
+close all;
+clear variables;
 rng('default'); % For reproducibility - See discussion in https://sccn.ucsd.edu/pipermail/eeglablist/2022/016932.html
 
 % Define the parameters
 params = define_params();
 save(fullfile(params.preprocessed_data_path,'pipeline_params.mat'),'params');
  
-if(isempty(gcp('nocreate')))
-    parObj = parpool();
-end
 
 %% ======= IMPORT RAW DATA =========
 % Try to load the already created study, otherwise import raw data with pop_importbids
@@ -85,10 +83,14 @@ for iRec=first:length(ALLEEG)
     EEGtemp = pop_resample(EEGtemp, params.sampling_rate);
     
     % 1. CLEAN LINE NOISE
-    try
-        EEGtemp = pop_cleanline(EEGtemp,'linefreqs',EEGtemp.BIDS.tInfo.PowerLineFrequency,'newversion',1);
-    catch ME
-        warning(['CleanLine not performed: ' ME.message ' Make sure you specify the Line Noise Frequency in the *_eeg.json file'])
+    for s=1:size(EEGtemp,2)
+        try
+            EEGtemp(s) = pop_zapline_plus(EEGtemp(s),'noisefreqs','line',...
+                'coarseFreqDetectPowerDiff',4,'chunkLength',0,...
+                'adaptiveNremove',1,'fixedNremove',1,'plotResults',0);
+        catch ME
+            warning(['ZapLine not performed: ' ME.message ' Make sure you specify the Line Noise Frequency in the *_eeg.json file'])
+        end
     end
     
     % 2. REMOVE BAD CHANNELS
@@ -119,12 +121,12 @@ for iRec=first:length(ALLEEG)
     % the ICA, interpolation of bad channels and bad segment detection and 
     % we select the run that is closer to the 'average' bad segment mask
     EEGOrig = EEGtemp;
-    nRep = 10;
+    nRep    = 10;
     EEGtemp_clean = cell(1,nRep);
     parfor iRep =1:nRep
         EEGtemp = EEGOrig;
         % 4. REMOVE ARTIFACTS WITH ICA
-        EEGtemp = pop_runica(EEGtemp,'icatype','runica','concatcond','off');
+        EEGtemp = pop_runica(EEGtemp,'icatype','picard','concatcond','off');
         EEGtemp = pop_iclabel(EEGtemp,'default');
         EEGtemp = pop_icflag(EEGtemp, params.IClabel); % flag artifactual components using IClabel
         classifications = EEGtemp.etc.ic_classification.ICLabel.classifications; % Keep classifications before component substraction
@@ -181,8 +183,7 @@ for iRec=first:length(ALLEEG)
         warning(['Data segmentation not performed: ' ME.message ' Probably no clean epochs remained. Recording will be removed.'])
         to_delete{end +1} = EEGtemp.filename;
     end
-    
-    
+        
     % Save datafile, clear it from memory and store it in the ALLEEG structure
     if exist('clean_channel_mask','var'), EEGtemp.etc.clean_channel_mask = clean_channel_mask; end; clear 'clean_channel_mask';
     EEGtemp = pop_saveset(EEGtemp, 'savemode', 'resave');

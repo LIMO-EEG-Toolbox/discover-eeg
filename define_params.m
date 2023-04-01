@@ -5,38 +5,64 @@ function params = define_params()
 %% DATA AND TOOLBOXES PATHS (TO BE MODIFIED BY USER)
 
 % The name of your study (use double quotes)
-params.study = 'LONGITUDINAL';
+params.study = 'test-retest';
 
 % The path of your raw data in BIDS format
-params.raw_data_path = '/rechenmagd4/Experiments/2023_1overf/data/Henrik';
+params.raw_data_path = '/indirect/staff/cyrilpernet/ds004148';
+
+% set number of workers: no input for default N-1 limo_check_ppool
+limo_check_ppool(6);
 
 % The path of the output of the pipeline (preprocessed data and extracted
 % brain features). By default is stored in a created 'derivatives' folder.
 t = datestr(now,'yyyy_mm_dd');
-params.preprocessed_data_path = fullfile(params.raw_data_path, ['derivatives_v' t]);
+params.preprocessed_data_path = fullfile(params.raw_data_path, ['derivatives' filesep t]);
 
 % Parameters to select a specific task,run and and session.
-params.session = {'baseline'}; % For all sessions: {} / for a specific session e.g. {'baseline'}
+params.session = {'session1'}; % For all sessions: {} / for a specific session e.g. {'baseline'}
 params.runs = [];
-params.task =  'closed'; % For all tasks: [] / for a specific task e.g. 'closed'
+params.task =  'eyesclosed'; % For all tasks: [] / for a specific task e.g. 'closed'
 
-% EEGLab path
-params.eeglab_path = '/rechenmagd4/toolboxes_and_functions/eeglab';
+% EEGLab path - https://github.com/sccn/eeglab
+params.eeglab_path = fileparts(which('eeglab.m'));
 
-% Fieldtrip path
-params.fieldtrip_path = '/rechenmagd4/toolboxes_and_functions/fieldtrip';
+% Fieldtrip path - https://github.com/fieldtrip/fieldtrip
+discovery = mfilename('fullpath');
+params.fieldtrip_path = fullfile(discovery,['external_functions' filesep 'fieldtrip-20230118']);
 
-% Brain Connectivity Toolbox path
-params.bct_path = '/rechenmagd4/toolboxes_and_functions/2019_03_03_BCT';
+% Brain Connectivity Toolbox path - https://sites.google.com/site/bctnet/
+params.bct_path = fullfile(discovery,['external_functions' filesep 'BrainConnectivityToolbox']);
 
 % Add the toolboxes and pipeline functions to matlab path (does not need to be modified by the user)
 run(fullfile(params.eeglab_path,'eeglab.m'));
+if ~exist('pop_importbids','file')
+    plugin_askinstall('bids-matlab-tools',[],1);
+end
+
+if ~exist('pop_zapline_plus','file')
+    plugin_askinstall('zapline-plus',[],1);
+end
+
+if ~exist('picard','file')
+    plugin_askinstall('picard', 'picard', 1);
+end
+
+% FieldTrip will get confuse if Fieldtrip-lite plugin is there
+test = dir(fullfile(params.eeglab_path,['plugins' filesep 'Fieldtrip-lite*']));
+if ~isempty(test)
+    rmpath(fullfile(test.folder,test.name))
+end
+
+% finish install 
+addpath(discovery)
+addpath(fullfile(discovery,'custom_functions'));
+addpath(fullfile(discovery,'external_functions'));
+addpath(fullfile(discovery,['external_functions' filesep 'spider_plot-master']));
+addpath(params.bct_path);
 addpath(params.fieldtrip_path);
 ft_defaults
-addpath(params.bct_path);
-addpath(fullfile('custom_functions'));
-addpath(genpath(fullfile('external_functions')));
-addpath(pwd)
+
+
 %% PREPROCESSING PARAMETERS
 % ===== Electrode positions =====
 % Parameter to select electrode positions from the BIDS sidecar file (default 'off')
